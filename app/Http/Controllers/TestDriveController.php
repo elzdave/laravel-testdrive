@@ -16,7 +16,7 @@ class TestDriveController extends Controller
     public function index()
     {
         $files = File::all();
-        return view('drive.index')->with(['files' => $files]);
+        return view('drives.index')->with(['files' => $files]);
     }
 
     /**
@@ -26,7 +26,7 @@ class TestDriveController extends Controller
      */
     public function create()
     {
-        return view('drive.create');
+        return view('drives.create');
     }
 
     /**
