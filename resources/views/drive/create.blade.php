@@ -10,7 +10,7 @@
   <form action="{{ route('drives.store') }}" method="post" enctype="multipart/form-data">
     @csrf
     @method('POST')
-    <input type="file" name="photo" id="photo" accept=".png,.jpg">
+    <input type="file" name="file" id="file" placeholder="Maksimal 10MB">
     <input type="submit" value="Kirimkan!">
   </form>
 </body>

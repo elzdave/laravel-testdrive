@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\File;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,7 +15,8 @@ class TestDriveController extends Controller
      */
     public function index()
     {
-        return view('drive.index');
+        $files = File::all();
+        return view('drive.index')->with(['files' => $files]);
     }
 
     /**
@@ -36,24 +38,34 @@ class TestDriveController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'photo' => 'required|file|max:1024|mimes:png,jpg'
+            'file' => 'required|file|max:10240'
         ]);
 
-        $photo = $request->photo;
-        Storage::disk('google')->put($photo->hashName(), $photo->get());
-        return view('drive.index')->with([
-            'filename' => $photo->hashName(),
-            'filelink' => route('drives.show', ['drive' => $photo->hashName()])
+        // store newly uploaded file to Google Drive
+        $uploaded = $request->file('file')->store('/', 'google');
+
+        // get file information from Google Drive
+        $file = $this->getCloudFileData($uploaded);
+
+        // create local database entry
+        $newFile = File::create([
+            'name' => $file['name'],
+            'filename' => $file['filename'],
+            'extension' => $file['extension'],
+            'dirname' => $file['dirname'],
+            'path' => $file['path'],
+            'mimetype' => $file['mimetype']
+        ]);
+
+        return redirect()->route('drives.index')->with([
+            'filename' => $newFile->name,
+            'filelink' => route('drives.show', ['drive' => $newFile->name]),
+            'path' => $newFile->path,
+            'message' => 'Sukses menggunggah file'
         ]);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function show($filename)
+    private function getCloudFileData($filename)
     {
         $dir = '/';
         $recursive = false; // Get subdirectories also?
@@ -63,11 +75,27 @@ class TestDriveController extends Controller
                          ->where('filename', '=', pathinfo($filename, PATHINFO_FILENAME))
                          ->where('extension', '=', pathinfo($filename, PATHINFO_EXTENSION))
                          ->first();
+        return $file;
+    }
 
-        $rawData = Storage::cloud()->get($file['path']);
+    /**
+     * Display the specified resource.
+     *
+     * @param  String $filename
+     * @return \Illuminate\Http\Response
+     */
+    public function show($filename)
+    {
+        try {
+            $file = File::where('name', $filename)->first();
 
-        return response($rawData, 200)
-                ->header('Content-Type', $file['mimetype']);
+            $rawData = Storage::cloud()->get($file->path);
+
+            return response($rawData, 200)->header('Content-Type', $file->mimetype);
+        } catch (\Throwable $th) {
+            abort(404);
+        }
+        
     }
 
     /**
@@ -96,11 +124,22 @@ class TestDriveController extends Controller
     /**
      * Remove the specified resource from storage.
      *
-     * @param  int  $id
+     * @param  String $filename
      * @return \Illuminate\Http\Response
      */
-    public function destroy($id)
+    public function destroy($filename)
     {
-        //
+        $file = File::where('name', $filename)->first();
+
+        try {
+            Storage::cloud()->delete($file->path);
+            $file->delete();
+
+            return redirect()->route('drives.index')->with([
+                'message' => 'Sukses menghapus file'
+            ]);
+        } catch (\Throwable $th) {
+            abort(500);
+        }
     }
 }
